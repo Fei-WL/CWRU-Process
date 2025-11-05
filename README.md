@@ -19,7 +19,7 @@
 >> stride: 步长，0-1区间
 
 ## 目录说明
-数据太大，因此没有上传。有需要的可以从[此处下载](https://pan.baidu.com/s/1AAp14jdKFz7VtFLeImfG5g?pwd=nj9r)此处给出raw_data目录中的目录结构，便于理解和运行。
+数据太大，因此没有上传。有需要的可以从[此处下载](https://pan.baidu.com/s/1AAp14jdKFz7VtFLeImfG5g?pwd=nj9r)。此处给出raw_data目录中的目录结构，便于理解和运行。
 ```
 raw_data
 ├─ Normal Baseline
