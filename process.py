@@ -121,7 +121,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Read MATLAB .mat files for bearing data')
     
     parser.add_argument('--root_dir', type=str, default='./raw_data')
-    parser.add_argument('--normal', type=bool, default=True)
     parser.add_argument('--device', type=str, default='DE')
     parser.add_argument('--freq', type=str, default='12k')
     parser.add_argument('--nclass', type=int, default=4)
