@@ -9,6 +9,7 @@ import numpy as np
 
 from scipy.io import loadmat
 from col_name import DATASET_DICT
+from sklearn.preprocessing import StandardScaler
 
 def split_data(data, train_ratio=0.7, val_ratio=0.2):
     length = data.shape[0]
@@ -21,7 +22,7 @@ def split_data(data, train_ratio=0.7, val_ratio=0.2):
     
     return train_data, val_data, test_data
 
-def get_samples(data, input_len, stride, label, drop_last=True):
+def get_samples(data, input_len, stride, label, id, drop_last=True):
     count = 0
     res = []
     while input_len + count * int(stride * input_len) <= data.shape[0]:
@@ -32,33 +33,41 @@ def get_samples(data, input_len, stride, label, drop_last=True):
     
     samples = np.array(res)
     labels = np.full(samples.shape[0], label)
-    return samples, labels
+    ids = np.full(samples.shape[0], id)
+    return samples, labels, ids
 
-def normalize_data(train_mean, train_std, data, eps=1e-8):
-    data_norm = (data - train_mean) / (train_std + eps)
-    return data_norm
-
-def save_data(root_path, train_data, train_label, val_data, val_label, test_data, test_label):
+def save_data(root_path, inputs, labels, ids, flag):
     if not os.path.exists(root_path):
         os.makedirs(root_path)
     
-    np.save(os.path.join(root_path, 'train_inputs.npy'), train_data)
-    np.save(os.path.join(root_path, 'train_label.npy'), train_label)
-    np.save(os.path.join(root_path, 'val_inputs.npy'), val_data)
-    np.save(os.path.join(root_path, 'val_label.npy'), val_label)
-    np.save(os.path.join(root_path, 'test_inputs.npy'), test_data)
-    np.save(os.path.join(root_path, 'test_label.npy'), test_label)
+    np.save(os.path.join(root_path, '{}_inputs.npy'.format(flag)), inputs)
+    np.save(os.path.join(root_path, '{}_labels.npy'.format(flag)), labels)
+    np.save(os.path.join(root_path, '{}_ids.npy'.format(flag)), ids)
     
-    print('Train shape: {}, Val shape: {}, Test shape: {}'.format(train_data.shape, val_data.shape, test_data.shape))
+    print('{} shape: {}'.format(flag, inputs.shape))
 
-def generata_datasets(root_dir: str, datasets_dict: list, input_len: int, stride: float):
-    train_data_list = []
-    val_data_list = []
-    test_data_list = []
+def set_samples(inputs, labels, ids, 
+                inputs_list, labels_list, ids_list):
+    inputs_list.append(inputs)
+    labels_list.append(labels)
+    ids_list.append(ids)
+
+def generata_datasets(root_dir: str, 
+                      datasets_dict: list, 
+                      input_len: int, 
+                      stride: float,
+                      normalize: bool):
+    train_inputs_list = []
+    val_inputs_list = []
+    test_inputs_list = []
     
-    train_data_labels = []
-    val_data_labels = []
-    test_data_labels = []
+    train_labels_list = []
+    val_labels_list = []
+    test_labels_list = []
+    
+    train_ids_list = []
+    val_ids_list = []
+    test_ids_list = []
     
     # Get data from each file according to its label and file path
     for label, dicts in enumerate(datasets_dict):
@@ -68,33 +77,35 @@ def generata_datasets(root_dir: str, datasets_dict: list, input_len: int, stride
             
             train_data, val_data, test_data = split_data(matdata)
             
-            train_samples, train_labels = get_samples(train_data, input_len, stride, label)
-            val_samples, val_labels = get_samples(val_data, input_len, stride, label)
-            test_samples, test_labels = get_samples(test_data, input_len, stride, label)
+            train_inputs, train_labels, train_ids = get_samples(train_data, input_len, stride, label, col_key)
+            val_inputs, val_labels, val_ids = get_samples(val_data, input_len, stride, label, col_key)
+            test_inputs, test_labels, test_ids = get_samples(test_data, input_len, stride, label, col_key)
             
-            train_data_list.append(train_samples)
-            val_data_list.append(val_samples)
-            test_data_list.append(test_samples)
-            
-            train_data_labels.append(train_labels)
-            val_data_labels.append(val_labels)
-            test_data_labels.append(test_labels)
-
-    train_data = np.expand_dims(np.concatenate(train_data_list, axis=0), axis=-1)
-    val_data = np.expand_dims(np.concatenate(val_data_list, axis=0), axis=-1)
-    test_data = np.expand_dims(np.concatenate(test_data_list, axis=0), axis=-1)
-    train_labels = np.concatenate(train_data_labels, axis=0)
-    val_labels = np.concatenate(val_data_labels, axis=0)
-    test_labels = np.concatenate(test_data_labels, axis=0)
+            set_samples(train_inputs, train_labels, train_ids, train_inputs_list, train_labels_list, train_ids_list)
+            set_samples(val_inputs, val_labels, val_ids, val_inputs_list, val_labels_list, val_ids_list)
+            set_samples(test_inputs, test_labels, test_ids, test_inputs_list, test_labels_list, test_ids_list)
+        
+    train_inputs = np.concatenate(train_inputs_list, axis=0)
+    val_inputs = np.concatenate(val_inputs_list, axis=0)
+    test_inputs = np.concatenate(test_inputs_list, axis=0)
+    train_labels = np.concatenate(train_labels_list, axis=0)
+    val_labels = np.concatenate(val_labels_list, axis=0)
+    test_labels = np.concatenate(test_labels_list, axis=0)
+    train_ids = np.concatenate(train_ids_list, axis=0)
+    val_ids = np.concatenate(val_ids_list, axis=0)
+    test_ids = np.concatenate(test_ids_list, axis=0)
     
     # Calculate mean and std from training data for normalization
-    train_mean = np.mean(train_data)
-    train_std = np.std(train_data)
-    norm_train_data = normalize_data(train_mean, train_std, train_data)
-    norm_val_data = normalize_data(train_mean, train_std, val_data)
-    norm_test_data = normalize_data(train_mean, train_std, test_data)
+    if normalize:
+        scaler = StandardScaler()
+        scaler.fit(train_inputs.squeeze(-1))
+        train_inputs = np.expand_dims(scaler.transform(train_inputs.squeeze(-1)), axis=-1)
+        val_inputs = np.expand_dims(scaler.transform(val_inputs.squeeze(-1)), axis=-1)
+        test_inputs = np.expand_dims(scaler.transform(test_inputs.squeeze(-1)), axis=-1)
     
-    return norm_train_data, norm_val_data, norm_test_data, train_labels, val_labels, test_labels
+    return train_inputs, val_inputs, test_inputs, \
+            train_labels, val_labels, test_labels, \
+            train_ids, val_ids, test_ids
 
 def make_description(args):
     name = '{}_{}_{}'.format(args.device, args.freq, args.nclass)
@@ -106,7 +117,7 @@ def make_description(args):
         'seq_len': args.input_len,
         'num_nodes': 1,
         'num_features': 1,
-        'shape': '[num_samples, seq_len, num_nodes, num_features]',
+        'shape': '[num_samples, seq_len, num_features]',
         'missing': False,
         'filling_missing': 'NA',
         'norm_each_channel': True
@@ -115,7 +126,6 @@ def make_description(args):
     with open(description_path, 'w') as f:
         json.dump(description, f, indent=4)
     print(f'{name} is finished.')
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Read MATLAB .mat files for bearing data')
@@ -126,12 +136,18 @@ if __name__ == '__main__':
     parser.add_argument('--nclass', type=int, default=4)
     parser.add_argument('--input_len', type=int, default=512)
     parser.add_argument('--stride', type=int, default=0.5)
+    parser.add_argument('--normalize', type=bool, default=True)
     args = parser.parse_args()
 
     key = '{}_{}_{}'.format(args.device, args.freq, args.nclass)
     datasets_dict = DATASET_DICT[key]
     
-    train_inputs, val_inputs, test_inputs, train_labels, val_labels, test_labels = generata_datasets(args.root_dir, datasets_dict, args.input_len, args.stride)
+    train_inputs, val_inputs, test_inputs, \
+    train_labels, val_labels, test_labels, \
+    train_ids, val_ids, test_ids = generata_datasets(args.root_dir, datasets_dict, args.input_len, args.stride, args.normalize)
     
-    save_data('./{}'.format(key), train_inputs, train_labels, val_inputs, val_labels, test_inputs, test_labels)
+    save_data('./{}'.format(key), train_inputs, train_labels, train_ids, flag="TRAIN")
+    save_data('./{}'.format(key), val_inputs, val_labels, val_ids, flag="VAL")
+    save_data('./{}'.format(key), test_inputs, test_labels, test_ids, flag="TEST")
+    
     make_description(args)
