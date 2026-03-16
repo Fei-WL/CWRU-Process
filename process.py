@@ -3,11 +3,13 @@ import pdb
 from tqdm import tqdm
 import json
 import torch
+import math
 import argparse
 
 import numpy as np
 
 from scipy.io import loadmat
+from scipy.signal import resample_poly
 from col_name import DATASET_DICT
 from sklearn.preprocessing import StandardScaler
 
@@ -36,6 +38,15 @@ def get_samples(data, input_len, stride, label, id, drop_last=True):
     ids = np.full(samples.shape[0], id)
     return samples, labels, ids
 
+def add_awgn(signal, snr):
+    """
+    向信号中添加高斯白噪声 (Additive White Gaussian Noise)
+    """
+    sig_power = np.mean(signal ** 2)
+    noise_power = sig_power / (10 ** (snr / 10.0))
+    noise = np.random.normal(0, np.sqrt(noise_power), size=signal.shape)
+    return signal + noise
+
 def save_data(root_path, inputs, labels, ids, flag):
     if not os.path.exists(root_path):
         os.makedirs(root_path)
@@ -52,7 +63,7 @@ def set_samples(inputs, labels, ids,
     labels_list.append(labels)
     ids_list.append(ids)
 
-def generata_datasets(root_dir: str, 
+def generate_datasets(root_dir: str, 
                       datasets_dict: list, 
                       input_len: int, 
                       stride: float,
@@ -69,13 +80,31 @@ def generata_datasets(root_dir: str,
     val_ids_list = []
     test_ids_list = []
     
+    orig_freq = 12000 if '12k' in args.freq else 48000
+    
     # Get data from each file according to its label and file path
     for label, dicts in enumerate(datasets_dict):
         for file_path, col_key in dicts.items():
             file_path = os.path.join(root_dir, file_path)
             matdata = loadmat(file_path)[col_key]
             
+            # 将数据展平以进行降采样处理
+            matdata = matdata.flatten()
+            
+            # 降采样模块
+            if args.target_freq is not None and args.target_freq != orig_freq:
+                gcd_val = math.gcd(args.target_freq, orig_freq)
+                up = args.target_freq // gcd_val
+                down = orig_freq // gcd_val
+                matdata = resample_poly(matdata, up, down)
+            
+            # 恢复维度 [N, 1]
+            matdata = np.expand_dims(matdata, axis=-1)
+            
             train_data, val_data, test_data = split_data(matdata)
+            
+            if args.snr is not None:
+                test_data = add_awgn(test_data, args.snr)
             
             train_inputs, train_labels, train_ids = get_samples(train_data, input_len, stride, label, col_key)
             val_inputs, val_labels, val_ids = get_samples(val_data, input_len, stride, label, col_key)
@@ -94,7 +123,6 @@ def generata_datasets(root_dir: str,
     train_ids = np.concatenate(train_ids_list, axis=0)
     val_ids = np.concatenate(val_ids_list, axis=0)
     test_ids = np.concatenate(test_ids_list, axis=0)
-    
     # Calculate mean and std from training data for normalization
     if normalize:
         scaler = StandardScaler()
@@ -134,9 +162,11 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default='DE')
     parser.add_argument('--freq', type=str, default='12k')
     parser.add_argument('--nclass', type=int, default=4)
-    parser.add_argument('--input_len', type=int, default=512)
-    parser.add_argument('--stride', type=int, default=0.5)
+    parser.add_argument('--input_len', type=int, default=1024)
+    parser.add_argument('--stride', type=float, default=0.5)
     parser.add_argument('--normalize', type=bool, default=True)
+    parser.add_argument('--target_freq', type=int, default=10000, help='Target resampling frequency')
+    parser.add_argument('--snr', type=float, default=None, help='Signal-to-Noise Ratio (dB) applied to test set')
     args = parser.parse_args()
 
     key = '{}_{}_{}'.format(args.device, args.freq, args.nclass)
@@ -144,10 +174,17 @@ if __name__ == '__main__':
     
     train_inputs, val_inputs, test_inputs, \
     train_labels, val_labels, test_labels, \
-    train_ids, val_ids, test_ids = generata_datasets(args.root_dir, datasets_dict, args.input_len, args.stride, args.normalize)
+    train_ids, val_ids, test_ids = generate_datasets(args.root_dir, datasets_dict, args.input_len, args.stride, args.normalize)
     
-    save_data('./{}'.format(key), train_inputs, train_labels, train_ids, flag="TRAIN")
-    save_data('./{}'.format(key), val_inputs, val_labels, val_ids, flag="VAL")
-    save_data('./{}'.format(key), test_inputs, test_labels, test_ids, flag="TEST")
+    suffix = '_' + str(args.input_len)
+    if args.snr is not None:
+        suffix += f'_SNR{int(args.snr)}'
+    
+    save_path = './' + key + suffix
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    save_data(save_path, train_inputs, train_labels, train_ids, flag="TRAIN")
+    save_data(save_path, val_inputs, val_labels, val_ids, flag="VAL")
+    save_data(save_path, test_inputs, test_labels, test_ids, flag="TEST")
     
     make_description(args)
