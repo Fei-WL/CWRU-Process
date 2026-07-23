@@ -1,0 +1,34 @@
+{
+    "name": "SEU_bearingset_20_0_30_2_CH2_10000Hz_1024",
+    "dataset": "SEU gearbox",
+    "subset": "bearingset",
+    "conditions": "20_0,30_2",
+    "num_classes": 5,
+    "class_names": [
+        "health",
+        "ball",
+        "inner",
+        "outer",
+        "comb"
+    ],
+    "channel_index_0_based": 1,
+    "channel_name": "Channel2",
+    "orig_freq": 5120,
+    "target_freq": 10000,
+    "equal_length": true,
+    "seq_len": 1024,
+    "stride": 0.5,
+    "split": {
+        "train_ratio": 0.7,
+        "val_ratio": 0.2,
+        "test_ratio": 0.10000000000000003,
+        "mode": "chronological split within each raw file"
+    },
+    "num_nodes": 1,
+    "num_features": 1,
+    "shape": "[num_samples, seq_len, num_features]",
+    "missing": false,
+    "filling_missing": "NA",
+    "normalize": true,
+    "normalization": "StandardScaler fitted on TRAIN_inputs.squeeze(-1), matching process.py"
+}

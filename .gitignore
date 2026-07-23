@@ -12,3 +12,4 @@ DE_12k_10_new/
 FE_12k_4_new/
 FE_12k_10_new/
 .vscode
+*.npy
